@@ -26,21 +26,43 @@ const HomeScreen = () => {
 
   const {
     isRecording,
+    isPaused,
     recordingDuration,
+    formatDuration,
     startRecording,
+    pauseRecording,
+    resumeRecording,
     stopRecording,
+    restartRecording,
+    cancelRecording,
     uploadRecording
   } = useRecording()
 
-  const handlePressIn = async () => {
+  const handleStartRecording = async () => {
     await startRecording()
   }
 
-  const handlePressOut = async () => {
+  const handlePauseResume = async () => {
+    if (isPaused) {
+      await resumeRecording()
+    } else {
+      await pauseRecording()
+    }
+  }
+
+  const handleStopAndSave = async () => {
     const uri = await stopRecording()
     if (uri && user) {
       await saveDump('', 'voice', uri)
     }
+  }
+
+  const handleRestart = async () => {
+    await restartRecording()
+  }
+
+  const handleCancel = async () => {
+    await cancelRecording()
   }
 
   const handleOpenWriting = () => {
@@ -132,14 +154,13 @@ const HomeScreen = () => {
               <Text style={styles.mainTitle}>Got something on your mind?</Text>
               <Text style={styles.mainSubtitle}>Say it. Type it. Dump it</Text>
               <Text style={styles.instructionText}>
-                Tap and hold on the button to speak ...or just type it out.
+                Tap the button to record ...or just type it out.
               </Text>
 
               {/* Microphone Button */}
               <TouchableOpacity
                 style={[styles.micButton, isRecording && styles.micButtonRecording]}
-                onPressIn={handlePressIn}
-                onPressOut={handlePressOut}
+                onPress={handleStartRecording}
                 activeOpacity={0.8}
               >
                 <Ionicons name="mic" size={32} color="#fff" />
@@ -181,26 +202,88 @@ const HomeScreen = () => {
       <Modal
         visible={isRecording}
         transparent={true}
-        animationType="fade"
+        animationType="slide"
       >
         <View style={styles.modalOverlay}>
           <View style={styles.recordingCard}>
+            {/* Close Button */}
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={handleCancel}
+            >
+              <Ionicons name="close" size={28} color="#666" />
+            </TouchableOpacity>
+
+            {/* Recording Indicator */}
             <View style={styles.recordingIndicator}>
-              <View style={styles.pulseCircle} />
-              <Ionicons name="mic" size={48} color="#FF3B30" />
+              {!isPaused && <View style={styles.pulseCircle} />}
+              <Ionicons
+                name={isPaused ? "mic-off" : "mic"}
+                size={48}
+                color={isPaused ? "#999" : "#FF3B30"}
+              />
             </View>
-            <Text style={styles.recordingText}>Recording...</Text>
-            <Text style={styles.recordingSubtext}>Release to stop</Text>
+
+            {/* Status Text */}
+            <Text style={styles.recordingText}>
+              {isPaused ? 'Paused' : 'Recording...'}
+            </Text>
+
+            {/* Duration */}
+            <Text style={styles.durationText}>
+              {formatDuration(recordingDuration)}
+            </Text>
+
+            {/* Waveform */}
             <View style={styles.waveformContainer}>
               {[...Array(20)].map((_, i) => (
                 <View
                   key={i}
                   style={[
                     styles.waveformBar,
-                    { height: Math.random() * 40 + 10 }
+                    {
+                      height: isPaused ? 10 : Math.random() * 40 + 10,
+                      backgroundColor: isPaused ? '#ccc' : '#FF3B30'
+                    }
                   ]}
                 />
               ))}
+            </View>
+
+            {/* Controls */}
+            <View style={styles.recordingControls}>
+              {/* Restart Button */}
+              <TouchableOpacity
+                style={styles.controlButton}
+                onPress={handleRestart}
+              >
+                <Ionicons name="refresh" size={24} color="#666" />
+                <Text style={styles.controlButtonText}>Restart</Text>
+              </TouchableOpacity>
+
+              {/* Pause/Resume Button */}
+              <TouchableOpacity
+                style={[styles.controlButton, styles.primaryControlButton]}
+                onPress={handlePauseResume}
+              >
+                <Ionicons
+                  name={isPaused ? "play" : "pause"}
+                  size={32}
+                  color="#fff"
+                />
+              </TouchableOpacity>
+
+              {/* Stop & Save Button */}
+              <TouchableOpacity
+                style={styles.controlButton}
+                onPress={handleStopAndSave}
+                disabled={isSaving}
+              >
+                <Ionicons name="checkmark" size={24} color="#4CAF50" />
+                <Text style={[styles.controlButtonText, styles.saveText]}>
+                  {isSaving ? 'Saving...' : 'Save'}
+                </Text>
+              </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -370,6 +453,47 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#999',
     marginBottom: 24,
+  },
+  closeButton: {
+    position: 'absolute',
+    top: 20,
+    right: 20,
+    zIndex: 10,
+  },
+  durationText: {
+    fontSize: 32,
+    fontWeight: '700',
+    color: '#000',
+    marginBottom: 24,
+    fontVariant: ['tabular-nums'],
+  },
+  recordingControls: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    width: '100%',
+    paddingHorizontal: 20,
+    marginTop: 16,
+  },
+  controlButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+  },
+  primaryControlButton: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: '#FF3B30',
+  },
+  controlButtonText: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
+  },
+  saveText: {
+    color: '#4CAF50',
+    fontWeight: '600',
   },
   waveformContainer: {
     flexDirection: 'row',
