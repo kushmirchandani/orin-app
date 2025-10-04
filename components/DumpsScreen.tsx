@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   View,
   Text,
@@ -6,95 +6,93 @@ import {
   StyleSheet,
   TextInput,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
+import { supabase } from '../lib/supabase'
+import { useAuth } from '../contexts/AuthContext'
+import { groupDumpsByPeriod, formatTimestamp } from '../utils/dumpUtils'
 
 interface Dump {
   id: string
   title: string
+  content: string
+  type: 'voice' | 'writing'
+  audio_url: string | null
   tags: { label: string; type: 'emotion' | 'category' }[]
-  timestamp: string
-  commentCount: number
-  audioCount: number
-  likeCount: number
+  created_at: string
+  category: 'Journals' | 'Tasks' | 'Notes' | 'Ideas'
 }
 
 const DumpsScreen = () => {
+  const { user } = useAuth()
   const [activeTab, setActiveTab] = useState<'Journals' | 'Tasks' | 'Notes' | 'Ideas'>('Journals')
   const [searchQuery, setSearchQuery] = useState('')
+  const [dumps, setDumps] = useState<Dump[]>([])
+  const [loading, setLoading] = useState(true)
 
-  // Mock data
-  const dumps: { [key: string]: Dump[] } = {
-    Today: [
-      {
-        id: '1',
-        title: 'On Edge, All Day, Today!',
-        tags: [
-          { label: 'Anxious', type: 'emotion' },
-          { label: '#anxiety', type: 'category' },
-          { label: '#stress', type: 'category' },
-        ],
-        timestamp: 'Just now',
-        commentCount: 0,
-        audioCount: 1,
-        likeCount: 0,
-      },
-      {
-        id: '2',
-        title: 'Tired but Hopeful Today',
-        tags: [
-          { label: 'Calm', type: 'emotion' },
-          { label: '#work', type: 'category' },
-          { label: '#self-reflection', type: 'category' },
-        ],
-        timestamp: 'Today, 9:07',
-        commentCount: 2,
-        audioCount: 1,
-        likeCount: 2,
-      },
-    ],
-    'This week': [
-      {
-        id: '3',
-        title: 'The Silence Was Too Loud',
-        tags: [
-          { label: 'Lonely', type: 'emotion' },
-          { label: '#isolation', type: 'category' },
-          { label: '#solitude', type: 'category' },
-        ],
-        timestamp: 'Aug 8, 2025',
-        commentCount: 2,
-        audioCount: 1,
-        likeCount: 0,
-      },
-      {
-        id: '4',
-        title: 'Small Wins Count',
-        tags: [
-          { label: 'Reflective', type: 'emotion' },
-          { label: '#productivity', type: 'category' },
-        ],
-        timestamp: 'Aug 7, 2025',
-        commentCount: 2,
-        audioCount: 0,
-        likeCount: 2,
-      },
-      {
-        id: '5',
-        title: 'The Idea Hit Me in Traffic',
-        tags: [
-          { label: 'Inspired', type: 'emotion' },
-          { label: '#startupideas', type: 'category' },
-        ],
-        timestamp: 'Aug 6, 2025',
-        commentCount: 2,
-        audioCount: 1,
-        likeCount: 0,
-      },
-    ],
-    'Last week': [],
+  useEffect(() => {
+    fetchDumps()
+
+    // Subscribe to real-time changes
+    const channel = supabase
+      .channel('dumps-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'dumps',
+        },
+        () => {
+          fetchDumps()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [activeTab, searchQuery])
+
+  const fetchDumps = async () => {
+    if (!user) return
+
+    try {
+      setLoading(true)
+      const { data: { user: currentUser } } = await supabase.auth.getUser()
+
+      if (!currentUser) return
+
+      let query = supabase
+        .from('dumps')
+        .select('*')
+        .eq('user_id', currentUser.id)
+        .eq('category', activeTab)
+        .order('created_at', { ascending: false })
+
+      // Apply search filter if there's a query
+      if (searchQuery.trim()) {
+        query = query.or(`title.ilike.%${searchQuery}%,content.ilike.%${searchQuery}%`)
+      }
+
+      const { data, error } = await query
+
+      if (error) {
+        console.error('Error fetching dumps:', error)
+        return
+      }
+
+      setDumps(data || [])
+    } catch (error) {
+      console.error('Error fetching dumps:', error)
+    } finally {
+      setLoading(false)
+    }
   }
+
+  const groupedDumps = groupDumpsByPeriod(dumps)
 
   return (
     <SafeAreaView style={styles.container}>
@@ -130,61 +128,73 @@ const DumpsScreen = () => {
 
       {/* Content */}
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        {Object.entries(dumps).map(([section, items]) => (
-          <View key={section} style={styles.section}>
-            <Text style={styles.sectionTitle}>{section}</Text>
-            <View style={styles.grid}>
-              {items.map((dump) => (
-                <TouchableOpacity key={dump.id} style={styles.card}>
-                  <Text style={styles.cardTitle}>{dump.title}</Text>
-                  <View style={styles.tagsContainer}>
-                    {dump.tags.map((tag, index) => (
-                      <View
-                        key={index}
-                        style={[
-                          styles.tag,
-                          tag.type === 'emotion' && styles.tagEmotion,
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.tagText,
-                            tag.type === 'emotion' && styles.tagEmotionText,
-                          ]}
-                        >
-                          {tag.label}
-                        </Text>
-                      </View>
-                    ))}
-                  </View>
-                  <View style={styles.cardFooter}>
-                    <Text style={styles.timestamp}>{dump.timestamp}</Text>
-                    <View style={styles.stats}>
-                      {dump.commentCount > 0 && (
-                        <View style={styles.stat}>
-                          <Ionicons name="chatbubble-outline" size={14} color="#999" />
-                          <Text style={styles.statText}>{dump.commentCount}</Text>
-                        </View>
-                      )}
-                      {dump.audioCount > 0 && (
-                        <View style={styles.stat}>
-                          <Ionicons name="mic" size={14} color="#999" />
-                          <Text style={styles.statText}>{dump.audioCount}</Text>
-                        </View>
-                      )}
-                      {dump.likeCount > 0 && (
-                        <View style={styles.stat}>
-                          <Ionicons name="heart-outline" size={14} color="#999" />
-                          <Text style={styles.statText}>{dump.likeCount}</Text>
-                        </View>
-                      )}
-                    </View>
-                  </View>
-                </TouchableOpacity>
-              ))}
-            </View>
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#000" />
           </View>
-        ))}
+        ) : dumps.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="folder-open-outline" size={64} color="#ccc" />
+            <Text style={styles.emptyText}>No {activeTab.toLowerCase()} yet</Text>
+            <Text style={styles.emptySubtext}>
+              Start dumping your thoughts to see them here
+            </Text>
+          </View>
+        ) : (
+          Object.entries(groupedDumps).map(([section, items]) => {
+            if (items.length === 0) return null
+
+            return (
+              <View key={section} style={styles.section}>
+                <Text style={styles.sectionTitle}>{section}</Text>
+                <View style={styles.grid}>
+                  {items.map((dump) => (
+                    <TouchableOpacity key={dump.id} style={styles.card}>
+                      <Text style={styles.cardTitle}>{dump.title}</Text>
+                      <View style={styles.tagsContainer}>
+                        {dump.tags.map((tag, index) => (
+                          <View
+                            key={index}
+                            style={[
+                              styles.tag,
+                              tag.type === 'emotion' && styles.tagEmotion,
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.tagText,
+                                tag.type === 'emotion' && styles.tagEmotionText,
+                              ]}
+                            >
+                              {tag.label}
+                            </Text>
+                          </View>
+                        ))}
+                      </View>
+                      <View style={styles.cardFooter}>
+                        <Text style={styles.timestamp}>
+                          {formatTimestamp(new Date(dump.created_at))}
+                        </Text>
+                        <View style={styles.stats}>
+                          {dump.audio_url && (
+                            <View style={styles.stat}>
+                              <Ionicons name="mic" size={14} color="#999" />
+                            </View>
+                          )}
+                          {dump.type === 'writing' && (
+                            <View style={styles.stat}>
+                              <Ionicons name="document-text-outline" size={14} color="#999" />
+                            </View>
+                          )}
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            )
+          })
+        )}
       </ScrollView>
     </SafeAreaView>
   )
@@ -325,6 +335,31 @@ const styles = StyleSheet.create({
   statText: {
     fontSize: 12,
     color: '#999',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingTop: 100,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingTop: 100,
+    paddingHorizontal: 40,
+  },
+  emptyText: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#666',
+    marginTop: 16,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: '#999',
+    marginTop: 8,
+    textAlign: 'center',
   },
 })
 

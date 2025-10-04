@@ -6,26 +6,41 @@ import {
   StyleSheet,
   TextInput,
   Modal,
+  Alert,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useAuth } from '../contexts/AuthContext'
 import { Ionicons } from '@expo/vector-icons'
 import DumpsScreen from './DumpsScreen'
 import AccountScreen from './AccountScreen'
+import { useRecording } from '../hooks/useRecording'
+import { supabase } from '../lib/supabase'
+import { generateTitle, extractTags } from '../utils/dumpUtils'
 
 const HomeScreen = () => {
-  const { signOut } = useAuth()
-  const [isRecording, setIsRecording] = useState(false)
+  const { user } = useAuth()
   const [showWritingMode, setShowWritingMode] = useState(false)
   const [journalText, setJournalText] = useState('')
   const [activeTab, setActiveTab] = useState<'home' | 'dumps' | 'account'>('home')
+  const [isSaving, setIsSaving] = useState(false)
 
-  const handlePressIn = () => {
-    setIsRecording(true)
+  const {
+    isRecording,
+    recordingDuration,
+    startRecording,
+    stopRecording,
+    uploadRecording
+  } = useRecording()
+
+  const handlePressIn = async () => {
+    await startRecording()
   }
 
-  const handlePressOut = () => {
-    setIsRecording(false)
+  const handlePressOut = async () => {
+    const uri = await stopRecording()
+    if (uri && user) {
+      await saveDump('', 'voice', uri)
+    }
   }
 
   const handleOpenWriting = () => {
@@ -37,10 +52,70 @@ const HomeScreen = () => {
     setJournalText('')
   }
 
-  const handleSaveJournal = () => {
-    // TODO: Save to database
-    console.log('Saving journal:', journalText)
-    handleCloseWriting()
+  const saveDump = async (content: string, type: 'voice' | 'writing', audioUri?: string) => {
+    if (!user) {
+      Alert.alert('Error', 'You must be logged in to save dumps')
+      return
+    }
+
+    try {
+      setIsSaving(true)
+
+      // Get current user ID from Supabase auth
+      const { data: { user: currentUser } } = await supabase.auth.getUser()
+      if (!currentUser) {
+        throw new Error('No authenticated user found')
+      }
+
+      // Upload audio if it's a voice note
+      let audioUrl = null
+      if (type === 'voice' && audioUri) {
+        audioUrl = await uploadRecording(audioUri, currentUser.id)
+        if (!audioUrl) {
+          throw new Error('Failed to upload audio')
+        }
+      }
+
+      // Generate title and tags
+      const title = type === 'writing' ? generateTitle(content) : 'Voice Note'
+      const tags = type === 'writing' ? extractTags(content) : []
+
+      // Save to database
+      const { error } = await supabase
+        .from('dumps')
+        .insert({
+          user_id: currentUser.id,
+          title,
+          content: content || 'Voice recording',
+          type,
+          audio_url: audioUrl,
+          tags,
+          category: 'Journals', // Default category
+        })
+
+      if (error) throw error
+
+      Alert.alert('Success', 'Dump saved successfully!')
+
+      // Reset form if writing mode
+      if (type === 'writing') {
+        handleCloseWriting()
+      }
+    } catch (error) {
+      console.error('Error saving dump:', error)
+      Alert.alert('Error', 'Failed to save dump. Please try again.')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const handleSaveJournal = async () => {
+    if (!journalText.trim()) {
+      Alert.alert('Empty Entry', 'Please write something before saving.')
+      return
+    }
+
+    await saveDump(journalText, 'writing')
   }
 
   return (
@@ -139,12 +214,14 @@ const HomeScreen = () => {
       >
         <SafeAreaView style={styles.writingContainer}>
           <View style={styles.writingHeader}>
-            <TouchableOpacity onPress={handleCloseWriting}>
+            <TouchableOpacity onPress={handleCloseWriting} disabled={isSaving}>
               <Ionicons name="close" size={28} color="#000" />
             </TouchableOpacity>
             <Text style={styles.writingTitle}>Journal Entry</Text>
-            <TouchableOpacity onPress={handleSaveJournal}>
-              <Text style={styles.saveButton}>Save</Text>
+            <TouchableOpacity onPress={handleSaveJournal} disabled={isSaving}>
+              <Text style={[styles.saveButton, isSaving && styles.saveButtonDisabled]}>
+                {isSaving ? 'Saving...' : 'Save'}
+              </Text>
             </TouchableOpacity>
           </View>
 
@@ -327,6 +404,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#007AFF',
+  },
+  saveButtonDisabled: {
+    opacity: 0.5,
   },
   journalContainer: {
     flex: 1,
