@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react'
 import { Audio } from 'expo-av'
+import * as FileSystem from 'expo-file-system/legacy'
 import { supabase } from '../lib/supabase'
 
 export const useRecording = () => {
@@ -116,16 +117,21 @@ export const useRecording = () => {
           durationInterval.current = null
         }
         await recording.stopAndUnloadAsync()
-        setRecording(null)
       } catch (error) {
         console.error('Failed to stop recording:', error)
       }
     }
 
-    // Start fresh recording
+    // Reset state
+    setRecording(null)
     setRecordingDuration(0)
     setIsPaused(false)
-    await startRecording()
+    setIsRecording(false)
+
+    // Wait a bit for cleanup, then start fresh recording
+    setTimeout(async () => {
+      await startRecording()
+    }, 100)
   }
 
   const cancelRecording = async () => {
@@ -153,15 +159,48 @@ export const useRecording = () => {
     if (!uri) return null
 
     try {
-      // Read file as blob
-      const response = await fetch(uri)
-      const blob = await response.blob()
       const fileName = `${userId}/${Date.now()}.m4a`
+
+      // Read file as base64
+      const base64 = await FileSystem.readAsStringAsync(uri, {
+        encoding: 'base64',
+      })
+
+      // Decode base64 to binary using React Native's atob
+      const decode = (str: string) => {
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/='
+        let output = ''
+
+        str = str.replace(/=+$/, '')
+
+        for (let i = 0; i < str.length;) {
+          const enc1 = chars.indexOf(str.charAt(i++))
+          const enc2 = chars.indexOf(str.charAt(i++))
+          const enc3 = chars.indexOf(str.charAt(i++))
+          const enc4 = chars.indexOf(str.charAt(i++))
+
+          const chr1 = (enc1 << 2) | (enc2 >> 4)
+          const chr2 = ((enc2 & 15) << 4) | (enc3 >> 2)
+          const chr3 = ((enc3 & 3) << 6) | enc4
+
+          output += String.fromCharCode(chr1)
+          if (enc3 !== 64) output += String.fromCharCode(chr2)
+          if (enc4 !== 64) output += String.fromCharCode(chr3)
+        }
+
+        return output
+      }
+
+      const binaryString = decode(base64)
+      const bytes = new Uint8Array(binaryString.length)
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i)
+      }
 
       // Upload to Supabase Storage
       const { data, error } = await supabase.storage
         .from('voice-notes')
-        .upload(fileName, blob, {
+        .upload(fileName, bytes.buffer, {
           contentType: 'audio/m4a',
         })
 

@@ -16,6 +16,7 @@ import AccountScreen from './AccountScreen'
 import { useRecording } from '../hooks/useRecording'
 import { supabase } from '../lib/supabase'
 import { generateTitle, extractTags } from '../utils/dumpUtils'
+import { transcribeAudio } from '../utils/transcription'
 
 const HomeScreen = () => {
   const { user } = useAuth()
@@ -89,18 +90,33 @@ const HomeScreen = () => {
         throw new Error('No authenticated user found')
       }
 
-      // Upload audio if it's a voice note
+      let finalContent = content
       let audioUrl = null
+
+      // Handle voice recording
       if (type === 'voice' && audioUri) {
+        // Upload audio first
         audioUrl = await uploadRecording(audioUri, currentUser.id)
         if (!audioUrl) {
           throw new Error('Failed to upload audio')
         }
+
+        // Try to transcribe the audio
+        console.log('Transcribing audio...')
+        const transcript = await transcribeAudio(audioUri)
+
+        if (transcript) {
+          finalContent = transcript
+          console.log('Transcription successful:', transcript.substring(0, 50) + '...')
+        } else {
+          finalContent = '[Voice recording - Transcription unavailable]'
+          console.log('Transcription failed or unavailable')
+        }
       }
 
       // Generate title and tags
-      const title = type === 'writing' ? generateTitle(content) : 'Voice Note'
-      const tags = type === 'writing' ? extractTags(content) : []
+      const title = finalContent ? generateTitle(finalContent) : 'Voice Note'
+      const tags = finalContent ? extractTags(finalContent) : []
 
       // Save to database
       const { error } = await supabase
@@ -108,7 +124,7 @@ const HomeScreen = () => {
         .insert({
           user_id: currentUser.id,
           title,
-          content: content || 'Voice recording',
+          content: finalContent,
           type,
           audio_url: audioUrl,
           tags,
