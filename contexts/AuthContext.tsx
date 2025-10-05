@@ -6,6 +6,7 @@ interface User {
   name: string
   email: string
   userMemory?: string
+  onboardingComplete?: boolean
 }
 
 interface AuthContextType {
@@ -15,6 +16,7 @@ interface AuthContextType {
   signUp: (name: string, email: string, password: string) => Promise<void>
   signIn: (email: string, password: string) => Promise<boolean>
   signOut: () => Promise<void>
+  reloadUser: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -26,13 +28,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (error) {
+        console.error('Error getting session:', error)
+        // Clear invalid session
+        supabase.auth.signOut()
+        setSession(null)
+        setUser(null)
+        setIsLoading(false)
+        return
+      }
+
       setSession(session)
       if (session?.user) {
         loadUserProfile(session.user)
       } else {
         setIsLoading(false)
       }
+    }).catch((error) => {
+      console.error('Session error:', error)
+      setSession(null)
+      setUser(null)
+      setIsLoading(false)
     })
 
     // Listen for auth changes
@@ -42,6 +59,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loadUserProfile(session.user)
       } else {
         setUser(null)
+        setIsLoading(false)
       }
     })
 
@@ -53,7 +71,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Get user profile from profiles table
       const { data, error } = await supabase
         .from('profiles')
-        .select('name, email, user_memory')
+        .select('name, email, user_memory, onboarding_complete')
         .eq('id', supabaseUser.id)
         .single()
 
@@ -63,12 +81,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           name: '',
           email: supabaseUser.email || '',
           userMemory: undefined,
+          onboardingComplete: false,
         })
       } else if (data) {
         setUser({
           name: data.name || '',
           email: data.email || supabaseUser.email || '',
           userMemory: data.user_memory || undefined,
+          onboardingComplete: data.onboarding_complete || false,
         })
       }
     } catch (error) {
@@ -82,14 +102,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       console.log('Starting signup for:', email)
 
-      // Sign up with Supabase Auth with metadata
+      // Sign up with Supabase Auth with metadata and disable email confirmation
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
           data: {
             name: name,
-          }
+          },
+          emailRedirectTo: undefined,
         }
       })
 
@@ -106,6 +127,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       console.log('User created successfully:', data.user.id)
+
+      // If there's a session, the user is automatically confirmed
+      if (data.session) {
+        console.log('User has active session, loading profile...')
+        await loadUserProfile(data.user)
+      }
 
       // Profile will be created automatically by the database trigger
       // No need to manually create it here
@@ -125,7 +152,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       })
 
       if (error) {
-        console.error('Sign in error:', error)
+        // Silently fail - error is shown in UI
         return false
       }
 
@@ -136,7 +163,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       return false
     } catch (error) {
-      console.error('Error signing in:', error)
+      // Silently fail - error is shown in UI
       return false
     } finally {
       setIsLoading(false)
@@ -153,6 +180,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }
 
+  const reloadUser = async () => {
+    try {
+      const { data: { user: currentUser } } = await supabase.auth.getUser()
+      if (currentUser) {
+        await loadUserProfile(currentUser)
+      }
+    } catch (error) {
+      console.error('Error reloading user:', error)
+    }
+  }
+
   return (
     <AuthContext.Provider
       value={{
@@ -162,6 +200,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         signUp,
         signIn,
         signOut,
+        reloadUser,
       }}
     >
       {children}

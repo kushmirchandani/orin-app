@@ -13,10 +13,11 @@ import { supabase } from '../lib/supabase'
 
 interface EmailVerificationScreenProps {
   email: string
+  password: string
   onVerified: () => void
 }
 
-const EmailVerificationScreen = ({ email, onVerified }: EmailVerificationScreenProps) => {
+const EmailVerificationScreen = ({ email, password, onVerified }: EmailVerificationScreenProps) => {
   const [isChecking, setIsChecking] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -26,18 +27,35 @@ const EmailVerificationScreen = ({ email, onVerified }: EmailVerificationScreenP
       setIsChecking(true)
       setError(null)
 
-      // Get the current session
-      const { data: { session } } = await supabase.auth.getSession()
+      // Try to refresh the session first
+      const { data: { session }, error: sessionError } = await supabase.auth.refreshSession()
 
-      if (session?.user) {
+      if (sessionError || !session) {
+        // Session expired, sign in with credentials
+        console.log('Session expired, signing in with credentials...')
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        })
+
+        if (signInError) {
+          console.error('Error signing in:', signInError)
+          setError('Please verify your email first, then try again.')
+          return
+        }
+
+        if (signInData.user?.email_confirmed_at) {
+          onVerified()
+        } else {
+          setError('Email not yet verified. Please check your inbox and click the confirmation link.')
+        }
+      } else {
         // Check if email is confirmed
         if (session.user.email_confirmed_at) {
           onVerified()
         } else {
           setError('Email not yet verified. Please check your inbox and click the confirmation link.')
         }
-      } else {
-        setError('No active session found. Please try signing up again.')
       }
     } catch (err) {
       console.error('Error checking verification:', err)

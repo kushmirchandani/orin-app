@@ -1,7 +1,9 @@
+import { useState, useEffect } from 'react'
 import { View, Text, TouchableOpacity, StyleSheet, ImageBackground } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import Svg, { Path } from 'react-native-svg'
+import { useTypewriter } from '../hooks/useTypewriter'
 
 interface WelcomeScreenProps {
   onGetStarted: () => void
@@ -9,6 +11,48 @@ interface WelcomeScreenProps {
 }
 
 const WelcomeScreen = ({ onGetStarted, onLogin }: WelcomeScreenProps) => {
+  const greetings = ["Hey!", "Hello!", "Hola!", "Bonjour!", "你好!", "こんにちは!", "Ciao!", "Hallo!", "Olá!"]
+  const [currentGreetingIndex, setCurrentGreetingIndex] = useState(0)
+  const [displayText, setDisplayText] = useState("")
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [showCursor, setShowCursor] = useState(true)
+
+  // Typing and deleting effect
+  useEffect(() => {
+    const currentGreeting = greetings[currentGreetingIndex]
+
+    const timeout = setTimeout(() => {
+      if (!isDeleting) {
+        // Typing
+        if (displayText.length < currentGreeting.length) {
+          setDisplayText(currentGreeting.slice(0, displayText.length + 1))
+        } else {
+          // Wait before deleting
+          setTimeout(() => setIsDeleting(true), 2000)
+        }
+      } else {
+        // Deleting
+        if (displayText.length > 0) {
+          setDisplayText(displayText.slice(0, -1))
+        } else {
+          // Move to next greeting
+          setIsDeleting(false)
+          setCurrentGreetingIndex((currentGreetingIndex + 1) % greetings.length)
+        }
+      }
+    }, isDeleting ? 50 : 100)
+
+    return () => clearTimeout(timeout)
+  }, [displayText, isDeleting, currentGreetingIndex])
+
+  // Blinking cursor effect
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setShowCursor(prev => !prev)
+    }, 530)
+    return () => clearInterval(interval)
+  }, [])
+
   return (
     <ImageBackground
       source={require('../assets/images/constellation-bg.png')}
@@ -21,7 +65,10 @@ const WelcomeScreen = ({ onGetStarted, onLogin }: WelcomeScreenProps) => {
         <View style={styles.content}>
           {/* Text */}
           <View style={styles.textContainer}>
-            <Text style={styles.heyText}>Hey!</Text>
+            <Text style={styles.heyText}>
+              {displayText}
+              <Text style={[styles.cursor, !showCursor && styles.cursorHidden]}>|</Text>
+            </Text>
             <Text style={styles.titleText}>Meet Orin</Text>
           </View>
 
@@ -63,13 +110,20 @@ const styles = StyleSheet.create({
     marginBottom: 40,
   },
   heyText: {
-    fontSize: 24,
+    fontSize: 32,
     color: '#ffffff',
     opacity: 0.6,
     fontWeight: '300',
   },
+  cursor: {
+    color: '#ffffff',
+    opacity: 0.6,
+  },
+  cursorHidden: {
+    opacity: 0,
+  },
   titleText: {
-    fontSize: 42,
+    fontSize: 64,
     color: '#ffffff',
     fontWeight: '700',
   },

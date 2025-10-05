@@ -8,8 +8,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   Image,
+  ImageBackground,
 } from 'react-native'
-import { LinearGradient } from 'expo-linear-gradient'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useTypewriter } from '../hooks/useTypewriter'
 
@@ -21,6 +21,7 @@ interface SignUpStep2Props {
 
 const SignUpStep2 = ({ name, onNext, onBack }: SignUpStep2Props) => {
   const [email, setEmail] = useState('')
+  const [isFocused, setIsFocused] = useState(false)
   const { displayText, isComplete } = useTypewriter({
     text: `Hey ${name}, what's your email?`,
     speed: 60,
@@ -47,11 +48,10 @@ const SignUpStep2 = ({ name, onNext, onBack }: SignUpStep2Props) => {
   }
 
   return (
-    <LinearGradient
-      colors={['#7B9FDB', '#5B6FBF', '#5F63B3']}
+    <ImageBackground
+      source={require('../assets/images/onboarding-bg.png')}
       style={styles.container}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 0, y: 1 }}
+      resizeMode="cover"
     >
       <SafeAreaView style={styles.safeArea}>
         <KeyboardAvoidingView
@@ -77,12 +77,12 @@ const SignUpStep2 = ({ name, onNext, onBack }: SignUpStep2Props) => {
               <View style={styles.promptContainer}>
                 <Text style={styles.promptText}>
                   {displayText}
-                  {showCursor && <Text style={styles.cursor}>|</Text>}
+                  <Text style={[styles.cursor, !showCursor && styles.cursorHidden]}>|</Text>
                 </Text>
               </View>
 
               <TextInput
-                style={styles.input}
+                style={[styles.input, isFocused && styles.inputFocused]}
                 value={email}
                 onChangeText={setEmail}
                 placeholder="john.doe@email.com"
@@ -92,6 +92,8 @@ const SignUpStep2 = ({ name, onNext, onBack }: SignUpStep2Props) => {
                 autoFocus
                 returnKeyType="next"
                 onSubmitEditing={handleContinue}
+                onFocus={() => setIsFocused(true)}
+                onBlur={() => setIsFocused(false)}
                 caretHidden={true}
               />
 
@@ -110,7 +112,7 @@ const SignUpStep2 = ({ name, onNext, onBack }: SignUpStep2Props) => {
           </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
-    </LinearGradient>
+    </ImageBackground>
   )
 }
 
@@ -176,16 +178,20 @@ const styles = StyleSheet.create({
   cursor: {
     color: '#1a1a1a',
   },
+  cursorHidden: {
+    opacity: 0,
+  },
   input: {
     fontSize: 20,
     color: '#1a1a1a',
-    borderWidth: 2,
-    borderColor: '#e0e0e0',
-    borderRadius: 8,
-    paddingHorizontal: 12,
+    borderBottomWidth: 2,
+    borderBottomColor: '#e0e0e0',
     paddingVertical: 12,
     marginBottom: 12,
     outlineStyle: 'none',
+  },
+  inputFocused: {
+    borderBottomColor: '#000',
   },
   errorText: {
     color: '#ff6b6b',

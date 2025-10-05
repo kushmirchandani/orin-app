@@ -19,13 +19,13 @@ export const useRecording = () => {
         return
       }
 
-      // Configure audio mode
+      // Set audio mode
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: true,
         playsInSilentModeIOS: true,
       })
 
-      // Start recording
+      // Create and start recording
       const { recording: newRecording } = await Audio.Recording.createAsync(
         Audio.RecordingOptionsPresets.HIGH_QUALITY
       )
@@ -48,9 +48,9 @@ export const useRecording = () => {
   }
 
   const pauseRecording = async () => {
-    if (!recording || !isRecording) return
-
     try {
+      if (!recording) return
+
       await recording.pauseAsync()
       setIsPaused(true)
 
@@ -67,9 +67,9 @@ export const useRecording = () => {
   }
 
   const resumeRecording = async () => {
-    if (!recording || !isPaused) return
-
     try {
+      if (!recording) return
+
       await recording.startAsync()
       setIsPaused(false)
 
@@ -85,11 +85,9 @@ export const useRecording = () => {
   }
 
   const stopRecording = async () => {
-    if (!recording) return null
-
     try {
-      setIsRecording(false)
-      setIsPaused(false)
+      if (!recording) return null
+
       if (durationInterval.current) {
         clearInterval(durationInterval.current)
         durationInterval.current = null
@@ -97,7 +95,10 @@ export const useRecording = () => {
 
       await recording.stopAndUnloadAsync()
       const uri = recording.getURI()
+
       setRecording(null)
+      setIsRecording(false)
+      setIsPaused(false)
       setRecordingDuration(0)
 
       console.log('Recording stopped, URI:', uri)
@@ -110,23 +111,23 @@ export const useRecording = () => {
 
   const restartRecording = async () => {
     // Stop current recording without saving
-    if (recording) {
-      try {
-        if (durationInterval.current) {
-          clearInterval(durationInterval.current)
-          durationInterval.current = null
-        }
-        await recording.stopAndUnloadAsync()
-      } catch (error) {
-        console.error('Failed to stop recording:', error)
+    try {
+      if (durationInterval.current) {
+        clearInterval(durationInterval.current)
+        durationInterval.current = null
       }
-    }
 
-    // Reset state
-    setRecording(null)
-    setRecordingDuration(0)
-    setIsPaused(false)
-    setIsRecording(false)
+      if (recording) {
+        await recording.stopAndUnloadAsync()
+        setRecording(null)
+      }
+
+      setIsRecording(false)
+      setIsPaused(false)
+      setRecordingDuration(0)
+    } catch (error) {
+      console.error('Failed to stop recording:', error)
+    }
 
     // Wait a bit for cleanup, then start fresh recording
     setTimeout(async () => {
@@ -135,18 +136,19 @@ export const useRecording = () => {
   }
 
   const cancelRecording = async () => {
-    if (!recording) return
-
     try {
-      setIsRecording(false)
-      setIsPaused(false)
       if (durationInterval.current) {
         clearInterval(durationInterval.current)
         durationInterval.current = null
       }
 
-      await recording.stopAndUnloadAsync()
+      if (recording) {
+        await recording.stopAndUnloadAsync()
+      }
+
       setRecording(null)
+      setIsRecording(false)
+      setIsPaused(false)
       setRecordingDuration(0)
 
       console.log('Recording cancelled')

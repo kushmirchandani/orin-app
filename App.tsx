@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react'
 import { StatusBar } from 'expo-status-bar'
 import { NavigationContainer } from '@react-navigation/native'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
-import AsyncStorage from '@react-native-async-storage/async-storage'
+import { Asset } from 'expo-asset'
+import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import LaunchScreen from './components/LaunchScreen'
 import WelcomeScreen from './components/WelcomeScreen'
@@ -14,12 +15,27 @@ import HomeScreen from './components/HomeScreen'
 const Stack = createNativeStackNavigator()
 
 function AppNavigator() {
-  const { isAuthenticated, isLoading: authLoading } = useAuth()
-  const [hasOnboarded, setHasOnboarded] = useState(false)
+  const { isAuthenticated, isLoading: authLoading, user } = useAuth()
   const [showLaunch, setShowLaunch] = useState(true)
   const [isLoading, setIsLoading] = useState(true)
   const [showWelcome, setShowWelcome] = useState(true)
   const [showSignUp, setShowSignUp] = useState(false)
+  const [justCompletedOnboarding, setJustCompletedOnboarding] = useState(false)
+
+  const hasOnboarded = user?.onboardingComplete || false
+
+  useEffect(() => {
+    console.log('App State:', {
+      isAuthenticated,
+      authLoading,
+      hasOnboarded,
+      showLaunch,
+      isLoading,
+      showWelcome,
+      showSignUp,
+      userOnboardingComplete: user?.onboardingComplete
+    })
+  }, [isAuthenticated, authLoading, hasOnboarded, showLaunch, isLoading, showWelcome, showSignUp, user])
 
   useEffect(() => {
     checkOnboardingStatus()
@@ -27,8 +43,11 @@ function AppNavigator() {
 
   const checkOnboardingStatus = async () => {
     try {
-      const onboarded = await AsyncStorage.getItem('hasOnboarded')
-      setHasOnboarded(onboarded === 'true')
+      // Preload background images
+      await Promise.all([
+        Asset.fromModule(require('./assets/images/onboarding-bg.png')).downloadAsync(),
+        Asset.fromModule(require('./assets/images/constellation-bg.png')).downloadAsync(),
+      ])
 
       // Show launch screen for 2 seconds
       setTimeout(() => {
@@ -42,16 +61,15 @@ function AppNavigator() {
   }
 
   const handleOnboardingComplete = async () => {
-    try {
-      await AsyncStorage.setItem('hasOnboarded', 'true')
-      setHasOnboarded(true)
-    } catch (error) {
-      console.error('Error saving onboarding status:', error)
-    }
+    // Onboarding complete is now managed in the database
+    // The OnboardingIntake component will update it directly
+    setJustCompletedOnboarding(true)
   }
 
   const handleSignUpComplete = () => {
+    console.log('handleSignUpComplete called - setting showSignUp to false')
     setShowSignUp(false)
+    setShowWelcome(false)
   }
 
   if (showLaunch || isLoading || authLoading) {
@@ -121,7 +139,14 @@ function AppNavigator() {
               )}
             </Stack.Screen>
           ) : (
-            <Stack.Screen name="Home" component={HomeScreen} />
+            <Stack.Screen name="Home">
+              {props => (
+                <HomeScreen
+                  {...props}
+                  route={{ params: { initialTab: justCompletedOnboarding ? 'account' : 'home' } }}
+                />
+              )}
+            </Stack.Screen>
           )}
         </Stack.Navigator>
       </NavigationContainer>
@@ -132,8 +157,10 @@ function AppNavigator() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <AppNavigator />
-    </AuthProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <AuthProvider>
+        <AppNavigator />
+      </AuthProvider>
+    </GestureHandlerRootView>
   )
 }

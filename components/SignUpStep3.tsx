@@ -8,8 +8,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   Image,
+  ImageBackground,
 } from 'react-native'
-import { LinearGradient } from 'expo-linear-gradient'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useTypewriter } from '../hooks/useTypewriter'
 
@@ -21,6 +21,8 @@ interface SignUpStep3Props {
 const SignUpStep3 = ({ onComplete, onBack }: SignUpStep3Props) => {
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [passwordFocused, setPasswordFocused] = useState(false)
+  const [confirmFocused, setConfirmFocused] = useState(false)
   const { displayText, isComplete } = useTypewriter({
     text: "Create a secure password",
     speed: 60,
@@ -46,11 +48,10 @@ const SignUpStep3 = ({ onComplete, onBack }: SignUpStep3Props) => {
   }
 
   return (
-    <LinearGradient
-      colors={['#7B9FDB', '#5B6FBF', '#5F63B3']}
+    <ImageBackground
+      source={require('../assets/images/onboarding-bg.png')}
       style={styles.container}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 0, y: 1 }}
+      resizeMode="cover"
     >
       <SafeAreaView style={styles.safeArea}>
         <KeyboardAvoidingView
@@ -76,14 +77,14 @@ const SignUpStep3 = ({ onComplete, onBack }: SignUpStep3Props) => {
               <View style={styles.promptContainer}>
                 <Text style={styles.promptText}>
                   {displayText}
-                  {showCursor && <Text style={styles.cursor}>|</Text>}
+                  <Text style={[styles.cursor, !showCursor && styles.cursorHidden]}>|</Text>
                 </Text>
               </View>
 
               <View style={styles.inputContainer}>
                 <Text style={styles.label}>Password</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, passwordFocused && styles.inputFocused]}
                   value={password}
                   onChangeText={setPassword}
                   placeholder="••••••••"
@@ -91,6 +92,8 @@ const SignUpStep3 = ({ onComplete, onBack }: SignUpStep3Props) => {
                   secureTextEntry
                   autoFocus
                   returnKeyType="next"
+                  onFocus={() => setPasswordFocused(true)}
+                  onBlur={() => setPasswordFocused(false)}
                   caretHidden={true}
                 />
                 {password.length > 0 && !isPasswordStrong && (
@@ -101,7 +104,7 @@ const SignUpStep3 = ({ onComplete, onBack }: SignUpStep3Props) => {
               <View style={styles.inputContainer}>
                 <Text style={styles.label}>Confirm Password</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, confirmFocused && styles.inputFocused]}
                   value={confirmPassword}
                   onChangeText={setConfirmPassword}
                   placeholder="••••••••"
@@ -109,6 +112,8 @@ const SignUpStep3 = ({ onComplete, onBack }: SignUpStep3Props) => {
                   secureTextEntry
                   returnKeyType="done"
                   onSubmitEditing={handleComplete}
+                  onFocus={() => setConfirmFocused(true)}
+                  onBlur={() => setConfirmFocused(false)}
                   caretHidden={true}
                 />
                 {confirmPassword.length > 0 && !passwordsMatch && (
@@ -130,7 +135,7 @@ const SignUpStep3 = ({ onComplete, onBack }: SignUpStep3Props) => {
           </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
-    </LinearGradient>
+    </ImageBackground>
   )
 }
 
@@ -195,6 +200,9 @@ const styles = StyleSheet.create({
   cursor: {
     color: '#1a1a1a',
   },
+  cursorHidden: {
+    opacity: 0,
+  },
   inputContainer: {
     marginBottom: 24,
   },
@@ -207,12 +215,13 @@ const styles = StyleSheet.create({
   input: {
     fontSize: 18,
     color: '#1a1a1a',
-    borderWidth: 2,
-    borderColor: '#e0e0e0',
-    borderRadius: 8,
-    paddingHorizontal: 12,
+    borderBottomWidth: 2,
+    borderBottomColor: '#e0e0e0',
     paddingVertical: 10,
     outlineStyle: 'none',
+  },
+  inputFocused: {
+    borderBottomColor: '#000',
   },
   hintText: {
     color: '#999',

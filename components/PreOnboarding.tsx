@@ -1,6 +1,5 @@
 import { useState } from 'react'
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from 'react-native'
-import { LinearGradient } from 'expo-linear-gradient'
+import { View, Text, StyleSheet, TouchableOpacity, ImageBackground } from 'react-native'
 
 interface PreOnboardingProps {
   onComplete: () => void
@@ -36,11 +35,10 @@ const PreOnboarding = ({ onComplete }: PreOnboardingProps) => {
   }
 
   return (
-    <LinearGradient
-      colors={['#7B9FDB', '#5B6FBF', '#5F63B3']}
+    <ImageBackground
+      source={require('../assets/images/onboarding-bg.png')}
       style={styles.container}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 0, y: 1 }}
+      resizeMode="cover"
     >
       <View style={styles.content}>
         <View style={styles.slide}>
@@ -78,7 +76,7 @@ const PreOnboarding = ({ onComplete }: PreOnboardingProps) => {
           </TouchableOpacity>
         </View>
       </View>
-    </LinearGradient>
+    </ImageBackground>
   )
 }
 

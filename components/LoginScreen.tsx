@@ -9,8 +9,8 @@ import {
   Platform,
   Alert,
   Image,
+  ImageBackground,
 } from 'react-native'
-import { LinearGradient } from 'expo-linear-gradient'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useAuth } from '../contexts/AuthContext'
 import { Ionicons } from '@expo/vector-icons'
@@ -25,28 +25,37 @@ const LoginScreen = ({ onSignUpPress, onBack }: LoginScreenProps) => {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [emailFocused, setEmailFocused] = useState(false)
+  const [passwordFocused, setPasswordFocused] = useState(false)
+  const [errorMessage, setErrorMessage] = useState('')
 
   const handleSignIn = async () => {
+    setErrorMessage('') // Clear previous errors
+
     if (!email.trim() || !password) {
-      Alert.alert('Error', 'Please enter both email and password')
+      setErrorMessage('Please enter both email and password')
+      console.log('Error: Missing email or password')
       return
     }
 
     setIsLoading(true)
+    console.log('Attempting sign in...')
     const success = await signIn(email.trim().toLowerCase(), password)
+    console.log('Sign in result:', success)
     setIsLoading(false)
 
     if (!success) {
-      Alert.alert('Error', 'Invalid email or password')
+      console.log('Setting error message')
+      setErrorMessage("Check your email/password, that's not a match :/")
+      console.log('Error message set to:', "Check your email/password, that's not a match :/")
     }
   }
 
   return (
-    <LinearGradient
-      colors={['#7B9FDB', '#5B6FBF', '#5F63B3']}
+    <ImageBackground
+      source={require('../assets/images/onboarding-bg.png')}
       style={styles.container}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 0, y: 1 }}
+      resizeMode="cover"
     >
       <SafeAreaView style={styles.safeArea}>
         <KeyboardAvoidingView
@@ -73,7 +82,7 @@ const LoginScreen = ({ onSignUpPress, onBack }: LoginScreenProps) => {
               <Text style={styles.title}>Welcome back</Text>
 
               <TextInput
-                style={styles.input}
+                style={[styles.input, emailFocused && styles.inputFocused]}
                 placeholder="Email"
                 placeholderTextColor="rgba(255, 255, 255, 0.6)"
                 value={email}
@@ -81,10 +90,13 @@ const LoginScreen = ({ onSignUpPress, onBack }: LoginScreenProps) => {
                 keyboardType="email-address"
                 autoCapitalize="none"
                 returnKeyType="next"
+                onFocus={() => setEmailFocused(true)}
+                onBlur={() => setEmailFocused(false)}
+                caretHidden={true}
               />
 
               <TextInput
-                style={[styles.input, styles.inputSpacing]}
+                style={[styles.input, styles.inputSpacing, passwordFocused && styles.inputFocused]}
                 placeholder="Password"
                 placeholderTextColor="rgba(255, 255, 255, 0.6)"
                 value={password}
@@ -92,7 +104,18 @@ const LoginScreen = ({ onSignUpPress, onBack }: LoginScreenProps) => {
                 secureTextEntry
                 returnKeyType="done"
                 onSubmitEditing={handleSignIn}
+                onFocus={() => setPasswordFocused(true)}
+                onBlur={() => setPasswordFocused(false)}
+                caretHidden={true}
               />
+
+              {/* Error Message */}
+              {errorMessage ? (
+                <View style={styles.errorContainer}>
+                  <Ionicons name="alert-circle" size={18} color="#FF6B6B" />
+                  <Text style={styles.errorText}>{errorMessage}</Text>
+                </View>
+              ) : null}
 
               <TouchableOpacity
                 style={[styles.signInButton, isLoading && styles.buttonDisabled]}
@@ -114,7 +137,7 @@ const LoginScreen = ({ onSignUpPress, onBack }: LoginScreenProps) => {
           </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
-    </LinearGradient>
+    </ImageBackground>
   )
 }
 
@@ -166,12 +189,13 @@ const styles = StyleSheet.create({
   input: {
     fontSize: 18,
     color: 'white',
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.5)',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderBottomWidth: 2,
+    borderBottomColor: 'rgba(255, 255, 255, 0.5)',
+    paddingVertical: 12,
+    outlineStyle: 'none',
+  },
+  inputFocused: {
+    borderBottomColor: '#fff',
   },
   inputSpacing: {
     marginTop: 16,
@@ -205,6 +229,24 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     textDecorationLine: 'underline',
+  },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(255, 107, 107, 0.15)',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 107, 107, 0.3)',
+  },
+  errorText: {
+    color: '#FF6B6B',
+    fontSize: 14,
+    fontWeight: '500',
+    flex: 1,
   },
 })
 

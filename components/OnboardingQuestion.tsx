@@ -9,11 +9,12 @@ import {
 } from 'react-native'
 import { useTypewriter } from '../hooks/useTypewriter'
 
-export type QuestionType = 'text' | 'multipleChoice' | 'multiSelect' | 'scale'
+export type QuestionType = 'text' | 'multipleChoice' | 'multiSelect' | 'scale' | 'phone'
 
 export interface Question {
   id: string
   question: string
+  subtitle?: string
   type: QuestionType
   options?: string[]
   placeholder?: string
@@ -39,11 +40,20 @@ const OnboardingQuestion = ({
     delay: 300,
   })
   const [showCursor, setShowCursor] = useState(true)
+  const [isFocused, setIsFocused] = useState(false)
   const [answer, setAnswer] = useState<any>(initialAnswer || '')
   const [selectedOptions, setSelectedOptions] = useState<string[]>(
     Array.isArray(initialAnswer) ? initialAnswer : []
   )
   const [scaleValue, setScaleValue] = useState<number>(initialAnswer || 0)
+
+  // Reset state when question changes
+  useEffect(() => {
+    setAnswer(initialAnswer || '')
+    setSelectedOptions(Array.isArray(initialAnswer) ? initialAnswer : [])
+    setScaleValue(initialAnswer || 0)
+    setIsFocused(false)
+  }, [question.id, initialAnswer])
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -104,22 +114,27 @@ const OnboardingQuestion = ({
             {displayText}
             {showCursor && <Text style={styles.cursor}>|</Text>}
           </Text>
+          {question.subtitle && isComplete && (
+            <Text style={styles.subtitleText}>{question.subtitle}</Text>
+          )}
         </View>
 
         {isComplete && (
           <View style={styles.answerContainer}>
-            {question.type === 'text' && (
+            {(question.type === 'text' || question.type === 'phone') && (
               <>
                 <TextInput
-                  style={styles.textInput}
+                  style={[styles.textInput, isFocused && styles.textInputFocused]}
                   value={answer}
                   onChangeText={setAnswer}
                   placeholder={question.placeholder || 'Type your answer...'}
                   placeholderTextColor="#999"
-                  multiline
-                  autoFocus
+                  multiline={question.type === 'text'}
+                  keyboardType={question.type === 'phone' ? 'phone-pad' : 'default'}
                   returnKeyType="done"
                   onSubmitEditing={handleTextAnswer}
+                  onFocus={() => setIsFocused(true)}
+                  onBlur={() => setIsFocused(false)}
                 />
                 <TouchableOpacity
                   style={[
@@ -257,20 +272,27 @@ const styles = StyleSheet.create({
   cursor: {
     color: '#1a1a1a',
   },
+  subtitleText: {
+    fontSize: 16,
+    color: '#666',
+    marginTop: 12,
+    lineHeight: 24,
+  },
   answerContainer: {
     marginTop: 20,
   },
   textInput: {
     fontSize: 18,
     color: '#1a1a1a',
-    borderWidth: 2,
-    borderColor: '#e0e0e0',
-    borderRadius: 12,
-    paddingHorizontal: 16,
+    borderBottomWidth: 2,
+    borderBottomColor: '#e0e0e0',
     paddingVertical: 16,
     marginBottom: 20,
     minHeight: 120,
     textAlignVertical: 'top',
+  },
+  textInputFocused: {
+    borderBottomColor: '#000',
   },
   submitButton: {
     backgroundColor: '#667eea',

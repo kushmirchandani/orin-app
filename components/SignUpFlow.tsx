@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
+import { Alert } from 'react-native'
 import { useAuth } from '../contexts/AuthContext'
+import { supabase } from '../lib/supabase'
 import SignUpStep1 from './SignUpStep1'
 import SignUpStep2 from './SignUpStep2'
 import SignUpStep3 from './SignUpStep3'
@@ -15,6 +17,7 @@ const SignUpFlow = ({ onComplete, onBack }: SignUpFlowProps) => {
   const [currentStep, setCurrentStep] = useState(1)
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [showVerification, setShowVerification] = useState(false)
 
   useEffect(() => {
@@ -35,21 +38,36 @@ const SignUpFlow = ({ onComplete, onBack }: SignUpFlowProps) => {
     setCurrentStep(3)
   }
 
-  const handleStep3Complete = async (password: string) => {
+  const handleStep3Complete = async (userPassword: string) => {
     try {
       console.log('Step 3: About to sign up with name:', name, 'email:', email)
-      await signUp(name, email, password)
+      setPassword(userPassword)
+      await signUp(name, email, userPassword)
       console.log('Step 3: Sign up completed successfully')
 
-      // Use a small delay to ensure auth state has settled
+      // Give auth state a moment to update, then proceed to onboarding
       setTimeout(() => {
-        console.log('Step 3: Setting showVerification to true')
-        setShowVerification(true)
-        console.log('Step 3: showVerification state updated')
-      }, 100)
+        console.log('Step 3: Calling onComplete to proceed to onboarding')
+        onComplete()
+      }, 500)
     } catch (error) {
       console.error('Error completing sign up:', error)
-      alert('Signup failed: ' + (error as Error).message)
+      const errorMessage = (error as Error).message
+
+      // Handle specific error cases with user-friendly messages
+      if (errorMessage.includes('User already registered')) {
+        Alert.alert(
+          'Email Already Registered',
+          'This email is already registered. Please try logging in instead, or use a different email.',
+          [{ text: 'OK' }]
+        )
+      } else if (errorMessage.includes('Invalid email')) {
+        Alert.alert('Invalid Email', 'Please enter a valid email address.', [{ text: 'OK' }])
+      } else if (errorMessage.includes('Password')) {
+        Alert.alert('Invalid Password', 'Password must be at least 6 characters long.', [{ text: 'OK' }])
+      } else {
+        Alert.alert('Signup Failed', errorMessage, [{ text: 'OK' }])
+      }
     }
   }
 
@@ -64,6 +82,7 @@ const SignUpFlow = ({ onComplete, onBack }: SignUpFlowProps) => {
     return (
       <EmailVerificationScreen
         email={email}
+        password={password}
         onVerified={handleVerificationComplete}
       />
     )

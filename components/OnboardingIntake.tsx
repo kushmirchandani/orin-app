@@ -5,10 +5,11 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  ImageBackground,
 } from 'react-native'
-import { LinearGradient } from 'expo-linear-gradient'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import OnboardingQuestion, { Question } from './OnboardingQuestion'
+import OnboardingFinalScreen from './OnboardingFinalScreen'
 import { generateUserMemory } from '../utils/generateUserMemory'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
@@ -18,10 +19,11 @@ interface OnboardingIntakeProps {
 }
 
 const OnboardingIntake = ({ onComplete }: OnboardingIntakeProps) => {
-  const { user } = useAuth()
+  const { user, reloadUser } = useAuth()
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
   const [answers, setAnswers] = useState<Record<string, any>>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [showFinalScreen, setShowFinalScreen] = useState(false)
 
   const questions: Question[] = [
     {
@@ -36,27 +38,6 @@ const OnboardingIntake = ({ onComplete }: OnboardingIntakeProps) => {
       question: "What areas of your life do you want to organize?",
       type: 'multiSelect',
       options: ['Work', 'Personal', 'Health & Wellness', 'Relationships', 'Finance', 'Hobbies & Interests'],
-      required: false,
-    },
-    {
-      id: 'capturePreference',
-      question: "How do you prefer to capture your thoughts?",
-      type: 'multipleChoice',
-      options: ['Voice notes', 'Writing', 'Both equally'],
-      required: false,
-    },
-    {
-      id: 'overwhelmedTime',
-      question: "What time of day do you usually feel most overwhelmed?",
-      type: 'multipleChoice',
-      options: ['Morning', 'Afternoon', 'Evening', 'Night', 'Varies'],
-      required: false,
-    },
-    {
-      id: 'mainGoal',
-      question: "What's your main goal with Orin?",
-      type: 'text',
-      placeholder: "Clear my mind and stay focused...",
       required: false,
     },
     {
@@ -111,28 +92,32 @@ const OnboardingIntake = ({ onComplete }: OnboardingIntakeProps) => {
         throw new Error('No user found')
       }
 
-      // Update profile with onboarding data and memory
+      // Update profile with onboarding data and memory (but NOT onboarding_complete yet)
+      const updateData: any = {
+        onboarding_data: finalAnswers,
+        user_memory: userMemory,
+      }
+
       const { error } = await supabase
         .from('profiles')
-        .update({
-          onboarding_data: finalAnswers,
-          user_memory: userMemory,
-        })
+        .update(updateData)
         .eq('id', currentUser.id)
 
       if (error) {
         throw error
       }
 
-      // Complete onboarding
-      onComplete()
+      console.log('Onboarding data saved, showing final screen...')
+
+      // Show final screen
+      setShowFinalScreen(true)
     } catch (error) {
       console.error('Error saving onboarding data:', error)
       Alert.alert(
         'Error',
         'There was a problem saving your information. Please try again.',
         [
-          { text: 'Skip', onPress: onComplete },
+          { text: 'Skip', onPress: () => setShowFinalScreen(true) },
           { text: 'Retry', onPress: () => saveOnboardingData(finalAnswers) },
         ]
       )
@@ -141,12 +126,65 @@ const OnboardingIntake = ({ onComplete }: OnboardingIntakeProps) => {
     }
   }
 
+  const handleFinalComplete = async () => {
+    try {
+      // Mark onboarding as complete
+      const { data: { user: currentUser } } = await supabase.auth.getUser()
+      if (!currentUser) return
+
+      await supabase
+        .from('profiles')
+        .update({ onboarding_complete: true })
+        .eq('id', currentUser.id)
+
+      // Reload user profile
+      await reloadUser()
+
+      // Complete onboarding - this will navigate to settings
+      onComplete()
+    } catch (error) {
+      console.error('Error completing onboarding:', error)
+      onComplete()
+    }
+  }
+
+  const handleSkipSettings = async () => {
+    try {
+      // Mark onboarding as complete without going to settings
+      const { data: { user: currentUser } } = await supabase.auth.getUser()
+      if (!currentUser) return
+
+      await supabase
+        .from('profiles')
+        .update({ onboarding_complete: true })
+        .eq('id', currentUser.id)
+
+      // Reload user profile
+      await reloadUser()
+
+      // Complete onboarding - will go to home instead of settings
+      onComplete()
+    } catch (error) {
+      console.error('Error completing onboarding:', error)
+      onComplete()
+    }
+  }
+
+  // Show final screen after questions are done
+  if (showFinalScreen) {
+    return (
+      <OnboardingFinalScreen
+        onComplete={handleFinalComplete}
+        onSkip={handleSkipSettings}
+      />
+    )
+  }
+
   return (
-    <LinearGradient
-      colors={['#7B9FDB', '#5B6FBF', '#5F63B3']}
+    <ImageBackground
+      source={require('../assets/images/onboarding-bg.png')}
       style={styles.container}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 0, y: 1 }}
+      resizeMode="cover"
     >
       <SafeAreaView style={styles.safeArea}>
         <KeyboardAvoidingView
@@ -185,7 +223,7 @@ const OnboardingIntake = ({ onComplete }: OnboardingIntakeProps) => {
           </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
-    </LinearGradient>
+    </ImageBackground>
   )
 }
 

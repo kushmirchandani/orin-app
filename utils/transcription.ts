@@ -2,7 +2,7 @@ import * as FileSystem from 'expo-file-system/legacy'
 
 /**
  * Transcribe audio file to text using OpenAI Whisper API
- * You'll need to add EXPO_PUBLIC_OPENAI_API_KEY to your .env file
+ * Uses direct fetch with FormData since React Native doesn't support File API
  */
 export const transcribeAudio = async (audioUri: string): Promise<string | null> => {
   const apiKey = process.env.EXPO_PUBLIC_OPENAI_API_KEY
@@ -13,36 +13,32 @@ export const transcribeAudio = async (audioUri: string): Promise<string | null> 
   }
 
   try {
-    // Read audio file as base64
-    const base64Audio = await FileSystem.readAsStringAsync(audioUri, {
-      encoding: 'base64',
-    })
-
-    // Convert base64 to blob-like format for upload
-    const audioBlob = `data:audio/m4a;base64,${base64Audio}`
-
-    // Create form data
+    // Create FormData for file upload
     const formData = new FormData()
+
+    // Add file to FormData (React Native handles this specially)
     formData.append('file', {
       uri: audioUri,
       type: 'audio/m4a',
       name: 'audio.m4a',
     } as any)
-    formData.append('model', 'whisper-1')
-    formData.append('language', 'en') // You can make this dynamic
 
-    // Call OpenAI Whisper API
+    formData.append('model', 'whisper-1')
+    formData.append('language', 'en')
+
+    // Call OpenAI Whisper API directly with fetch
     const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
+        // Don't set Content-Type - let FormData set it with boundary
       },
       body: formData,
     })
 
     if (!response.ok) {
-      const error = await response.json()
-      console.error('Transcription error:', error)
+      const errorText = await response.text()
+      console.error('Whisper API error:', response.status, errorText)
       return null
     }
 
